@@ -1,0 +1,104 @@
+module UART_tx(clk,tx_in,tx_out,tx,tx_active,tx_done);
+  input [7:0]tx_in;
+  input tx;
+  input clk;
+  output  tx_active;
+  output reg tx_out;
+  output tx_done;
+
+  parameter tx_idle=2'b00;
+  parameter tx_start_bits=2'b01;
+  parameter tx_data_bits=2'b10;
+  parameter tx_stop_bits=2'b11;
+
+  reg CLKS_PER_BIT;
+  reg [1:0]tx_mode=0;
+  reg [7:0]tx_data=0;
+  reg [7:0]tx_clk_count;
+  reg [2:0]tx_bit_index=0;
+  reg t_active;
+  reg t_done;
+  reg en;
+
+UART_BaudRate_generator UB1(.Clk(clk),.lim(CLKS_PER_BIT),.BaudRate(tx_clk_count),.en(en));
+
+  always@(posedgeclk)
+    begin
+      case(tx_mode)
+tx_idle:
+          begin
+tx_out<=1'b1;
+t_done<=1'b0;
+tx_bit_index<=0;
+en<=0;
+            if(tx==1'b1)
+              begin
+t_active<=1'b1;
+tx_data<=tx_in;
+tx_mode<=tx_start_bits;
+              end
+            else
+tx_mode<=tx_idle;
+          end
+tx_start_bits:
+          begin
+tx_out<=1'b0;
+            if(tx_clk_count<CLKS_PER_BIT-1)
+              begin
+en<=1;
+tx_mode<=tx_start_bits;
+              end
+            else
+              begin
+en<=0;
+tx_mode<=tx_data_bits;
+              end
+          end
+tx_data_bits:
+          begin
+tx_out<=tx_data[tx_bit_index];
+            if(tx_clk_count<CLKS_PER_BIT-1)
+              begin
+en<=1;
+tx_mode<=tx_data_bits;
+              end
+            else
+              begin
+en<=0;
+                if(tx_bit_index<7)
+                  begin
+tx_bit_index=tx_bit_index+1;
+tx_mode<=tx_data_bits;
+                  end
+                else
+                  begin
+tx_bit_index<=0;
+tx_mode<=tx_stop_bits;
+                  end
+              end  
+          end
+tx_stop_bits:
+          begin
+tx_out<=1'b1;
+            if(tx_clk_count<CLKS_PER_BIT-1)
+              begin
+en<=1;
+tx_mode<=tx_stop_bits;
+              end
+            else
+              begin
+t_done<=1'b1;
+en<=0;
+tx_mode<=tx_idle;
+t_active<=1'b0;
+              end
+          end
+        default:
+          begin
+tx_mode<=tx_idle;
+          end
+endcase
+    end
+  assign tx_active=t_active;
+  assign tx_done=t_done;
+endmodule
